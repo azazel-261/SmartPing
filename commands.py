@@ -1,6 +1,13 @@
-from typing import Callable, Coroutine, Any
+from typing import Callable, Coroutine, Any, Sequence
 import hikari
 import data
+import database
+
+def get_option(options: Sequence[hikari.CommandInteractionOption], name: str, default = None):
+    for o in options:
+        if o.name == name:
+            return o.value
+    return default
 
 async def help_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE, flags=hikari.MessageFlag.EPHEMERAL)
@@ -14,6 +21,10 @@ async def help_command(interaction: hikari.CommandInteraction, bot: hikari.RESTB
 
 async def create_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE, flags=hikari.MessageFlag.EPHEMERAL)
+    if not interaction.guild_id:
+        return
+    print(interaction.options)
+    await database.create_group(interaction.user.id, interaction.guild_id, str(get_option(interaction.options[0].options, "name", "new group")), bool(get_option(interaction.options[0].options, "private", False)))
     await interaction.edit_initial_response("Group create")
 
 async def join_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot):

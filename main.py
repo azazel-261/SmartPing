@@ -2,6 +2,12 @@ import os
 import hikari
 import commands
 import autocomplete
+import database
+import asyncio
+import sys
+
+if sys.version_info >= (3, 8) and sys.platform.lower().startswith("win"):
+    asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
 
 token = os.getenv("DISCORD_TOKEN")
 public_key = os.getenv("PUBLIC_KEY")
@@ -38,7 +44,6 @@ async def handle_autocomplete(interaction: hikari.AutocompleteInteraction):
     if handler:
         return await handler(interaction, bot)
     return interaction.build_response([])
-
 
 async def create_commands(_bot: hikari.RESTBot):
     application = await _bot.rest.fetch_application()
