@@ -30,3 +30,14 @@ attribute_help_message = \
 """\
 Attribute list\
 """
+
+error_codes = {
+    0 : "Operation successful",
+    1 : "UniqueViolation: group with this name already exists",
+    2 : "UniqueViolation: user already present in the group",
+    3 : "Query Failed: Group not found or is private",
+    4 : "Insert Failed: Group reached it's max capacity"
+}
+
+def get_error_code(code: int):
+    return error_codes.get(code, "Unknown error")
