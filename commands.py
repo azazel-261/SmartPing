@@ -1,9 +1,6 @@
 from typing import Callable, Coroutine, Any, Sequence
 
-import aiopg
 import hikari
-import psycopg2
-
 import data
 import database
 import utils
@@ -47,12 +44,25 @@ async def join_command(interaction: hikari.CommandInteraction, bot: hikari.RESTB
         await interaction.edit_initial_response(data.get_error_code(res))
 
 async def leave_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot):
-    await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE, flags=hikari.MessageFlag.EPHEMERAL)
-    await interaction.edit_initial_response("Group leave")
+    await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
+                                              flags=hikari.MessageFlag.EPHEMERAL)
+    if not interaction.guild_id:
+        return
+    res = await database.leave_group(interaction.options[0].options[0].value, interaction.guild_id, interaction.user.id)
+    if not res:
+        await interaction.edit_initial_response("Group leave successful")
+    else:
+        await interaction.edit_initial_response(data.get_error_code(res))
 
 async def leaveall_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE, flags=hikari.MessageFlag.EPHEMERAL)
-    await interaction.edit_initial_response("Group leaveall")
+    if not interaction.guild_id:
+        return
+    res = await database.leave_all_groups(interaction.guild_id, interaction.user.id)
+    if not res:
+        await interaction.edit_initial_response("Successfully left all groups")
+    else:
+        await interaction.edit_initial_response(data.get_error_code(res))
 
 async def call_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE, flags=hikari.MessageFlag.EPHEMERAL)

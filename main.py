@@ -2,7 +2,6 @@ import os
 import hikari
 import commands
 import autocomplete
-import database
 import asyncio
 import sys
 
@@ -15,15 +14,22 @@ public_key = os.getenv("PUBLIC_KEY")
 if not token or not public_key:
     exit(-1)
 
+def build_interaction_path(interaction: hikari.CommandInteraction | hikari.AutocompleteInteraction):
+    path = [interaction.command_name]
+
+    options = interaction.options
+
+    while True:
+        if options[0].type == hikari.OptionType.SUB_COMMAND or options[0].type == hikari.OptionType.SUB_COMMAND_GROUP:
+            path.append(options[0].name)
+            options = options[0].options
+        else:
+            break
+    return " ".join(path)
+
 async def handle_command(interaction: hikari.CommandInteraction):
-    command_path = [interaction.command_name]
-
-    subcommands = [_ for _ in interaction.options if _.type == hikari.OptionType.SUB_COMMAND or _.type == hikari.OptionType.SUB_COMMAND_GROUP]
-
-    for sub in subcommands:
-        command_path.append(sub.name)
-
-    command = commands.get(" ".join(command_path)) or commands.get(interaction.command_name)
+    command_path = build_interaction_path(interaction)
+    command = commands.get(command_path) or commands.get(interaction.command_name)
 
     if command:
         await command(interaction, bot)
@@ -31,15 +37,8 @@ async def handle_command(interaction: hikari.CommandInteraction):
         await interaction.create_initial_response(hikari.ResponseType.MESSAGE_CREATE, "Internal error", flags=hikari.MessageFlag.EPHEMERAL)
 
 async def handle_autocomplete(interaction: hikari.AutocompleteInteraction):
-    command_path = [interaction.command_name]
-
-    subcommands = [_ for _ in interaction.options if
-                   _.type == hikari.OptionType.SUB_COMMAND or _.type == hikari.OptionType.SUB_COMMAND_GROUP]
-
-    for sub in subcommands:
-        command_path.append(sub.name)
-
-    handler = autocomplete.get(" ".join(command_path)) or commands.get(interaction.command_name)
+    command_path = build_interaction_path(interaction)
+    handler = autocomplete.get(command_path) or commands.get(interaction.command_name)
 
     if handler:
         return await handler(interaction, bot)

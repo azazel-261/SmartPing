@@ -33,11 +33,13 @@ Attribute list\
 
 error_codes = {
     0 : "Operation successful",
-    1 : "UniqueViolation: group with this name already exists",
-    2 : "UniqueViolation: user already present in the group",
+    1 : "UniqueViolation: Group with this name already exists",
+    2 : "UniqueViolation: User already present in the group",
     3 : "Query Failed: Group not found or is private",
-    4 : "Insert Failed: Group reached it's max capacity"
+    4 : "Insert Failed: Group reached it's max capacity",
+    5 : "Delete Failed: User not present in group",
+    6 : "Delete Failed: User not in any groups",
 }
 
 def get_error_code(code: int):
-    return error_codes.get(code, "Unknown error")
+    return f"{code} - {error_codes.get(code, "Unknown error")}"
