@@ -41,6 +41,14 @@ async def count_group_members(group_id: int):
                 return res[0]
             return 0
 
+async def delete_if_empty(group_id: int):
+    member_count = await count_group_members(group_id)
+    if not member_count:
+        async with await get_connection() as conn:
+            async with conn.cursor() as cursor:
+                await cursor.execute("DELETE FROM groups WHERE id = %s", (group_id, ))
+
+
 async def create_group(owner_id: int, guild_id: int, name: str,
                        private: bool = False, member_calls: bool = True,
                        ext_calls: bool = True):
@@ -83,6 +91,7 @@ async def leave_group(name: str, guild_id: int, user_id: int):
             res = await cursor.fetchone()
             if not res:
                 return 5
+            await delete_if_empty(res[0])
             return 0
 
 async def leave_all_groups(guild_id: int, user_id: int):
@@ -93,4 +102,7 @@ async def leave_all_groups(guild_id: int, user_id: int):
             res = await cursor.fetchone()
             if not res:
                 return 6
+            while res:
+                await delete_if_empty(res[0])
+                res = await cursor.fetchone()
             return 0

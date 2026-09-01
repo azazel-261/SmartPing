@@ -19,7 +19,7 @@ def build_interaction_path(interaction: hikari.CommandInteraction | hikari.Autoc
 
     options = interaction.options
 
-    while True:
+    while options:
         if options[0].type == hikari.OptionType.SUB_COMMAND or options[0].type == hikari.OptionType.SUB_COMMAND_GROUP:
             path.append(options[0].name)
             options = options[0].options
