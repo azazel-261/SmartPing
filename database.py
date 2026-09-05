@@ -167,11 +167,11 @@ async def fetch_group_users_for_call(name: str, guild_id: int, executing_user_id
             group = await cursor.fetchone()
             if not group:
                 raise DatabaseError("Group not found or you don't have permission to call it")
-            await cursor.execute("SELECT user_id FROM group_relations WHERE group_id = %s")
-            res = await cursor.fetchmany(10)
+            await cursor.execute("SELECT user_id FROM group_relations WHERE group_id = %s", (group[0], ))
+            res = await cursor.fetchmany(50)
             if not res:
                 raise DatabaseError("No users to call!")
             while res:
                 yield res
-                res = await cursor.fetchmany(10)
+                res = await cursor.fetchmany(50)
             return

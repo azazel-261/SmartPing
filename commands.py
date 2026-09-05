@@ -1,3 +1,4 @@
+import asyncio
 from typing import Callable, Coroutine, Any, Sequence
 
 import hikari
@@ -98,7 +99,16 @@ async def call_command(interaction: hikari.CommandInteraction, bot: hikari.RESTB
     except database.DatabaseError as e:
         await interaction.edit_initial_response(e.args[0])
         return
-
+    await interaction.delete_initial_response()
+    msg = str(get_option(interaction.options[0].options, "msg", "")) + "\n"
+    await bot.rest.create_message(interaction.channel_id, f"Call by <@{interaction.user.id}>\n{msg}")
+    async for group in generator:
+        await asyncio.sleep(1)
+        ids = [_[0] for _ in group]
+        pings = "".join([f"<@{_}>" for _ in ids])
+        out = await bot.rest.create_message(interaction.channel_id, msg + pings, user_mentions=ids)
+        await asyncio.sleep(0.5)
+        await out.delete()
 
 
 commands: dict[str, Callable[[hikari.CommandInteraction, hikari.RESTBot], Coroutine[Any, Any, None]]] = {
