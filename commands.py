@@ -5,6 +5,7 @@ import hikari
 import data
 import database
 import utils
+from database import generator_fetch_users_for_call
 
 
 def get_option(options: Sequence[hikari.CommandInteractionOption], name: str, default=None):
@@ -94,15 +95,18 @@ async def call_command(interaction: hikari.CommandInteraction, bot: hikari.RESTB
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
                                               flags=hikari.MessageFlag.EPHEMERAL)
     try:
-        generator = database.fetch_group_users_for_call(interaction.options[0].options[0].value, interaction.guild_id, interaction.user.id,
-                                    await utils.check_if_admin(bot, interaction.user.id, interaction.guild_id))
+        group_id = await database.prepare_group_for_call(interaction.options[0].options[0].value, interaction.guild_id, interaction.user.id,
+                                                    await utils.check_if_admin(bot, interaction.user.id, interaction.guild_id))
     except database.DatabaseError as e:
         await interaction.edit_initial_response(e.args[0])
         return
     await interaction.delete_initial_response()
     msg = str(get_option(interaction.options[0].options, "msg", "")) + "\n"
+    generator = generator_fetch_users_for_call(group_id)
     await bot.rest.create_message(interaction.channel_id, f"Call by <@{interaction.user.id}>\n{msg}")
     async for group in generator:
+        if not group:
+            continue
         await asyncio.sleep(1)
         ids = [_[0] for _ in group]
         pings = "".join([f"<@{_}>" for _ in ids])

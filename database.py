@@ -1,3 +1,5 @@
+from datetime import datetime, timedelta
+
 import aiopg
 import os
 import psycopg2
@@ -157,21 +159,32 @@ async def delete_group(name: str, guild_id: int, executing_user_id: int, admin: 
             await cursor.execute("DELETE FROM groups WHERE id = %s", (res[0],))
 
 
-async def fetch_group_users_for_call(name: str, guild_id: int, executing_user_id: int, admin: bool = False):
+async def generator_fetch_users_for_call(group_id: int):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
-            await cursor.execute("SELECT g.id FROM groups g WHERE g.guild_id = %s AND g.name = %s AND \
+            await cursor.execute("SELECT user_id FROM group_relations WHERE group_id = %s", (group_id,))
+            res = await cursor.fetchmany(50)
+            while res:
+                yield res
+                res = await cursor.fetchmany(50)
+            return
+
+
+async def prepare_group_for_call(name: str, guild_id: int, executing_user_id: int, admin: bool = False):
+    async with await get_connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT g.id, g.last_call FROM groups g WHERE g.guild_id = %s AND g.name = %s AND \
             (g.owner_id = %s OR g.external_calls = TRUE OR %s = TRUE OR \
             (EXISTS(SELECT * FROM group_relations r WHERE group_id = g.id AND user_id = %s) AND g.member_calls = TRUE))",
                                  (guild_id, name, executing_user_id, admin, executing_user_id,))
             group = await cursor.fetchone()
             if not group:
                 raise DatabaseError("Group not found or you don't have permission to call it")
-            await cursor.execute("SELECT user_id FROM group_relations WHERE group_id = %s", (group[0], ))
-            res = await cursor.fetchmany(50)
-            if not res:
-                raise DatabaseError("No users to call!")
-            while res:
-                yield res
-                res = await cursor.fetchmany(50)
-            return
+            now = datetime.now()
+            if group[1]:
+                last_call: datetime = group[1]
+                if now - last_call < timedelta(minutes=5) and not admin:
+                    raise DatabaseError("Group call still on cooldown!")
+            await cursor.execute("UPDATE groups SET last_call = %s WHERE id = %s", (now, group[0], ))
+            return group[0]
+
