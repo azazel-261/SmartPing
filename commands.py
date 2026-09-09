@@ -115,6 +115,29 @@ async def call_command(interaction: hikari.CommandInteraction, bot: hikari.RESTB
         await out.delete()
 
 
+async def invite_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot):
+    await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
+                                              flags=hikari.MessageFlag.EPHEMERAL)
+    try:
+        group = await database.fetch_group_for_invite(interaction.options[0].options[0].value, interaction.guild_id,
+                                                         interaction.user.id,
+                                                         await utils.check_if_admin(bot, interaction.user.id,
+                                                                                    interaction.guild_id))
+    except database.DatabaseError as e:
+        await interaction.edit_initial_response(e.args[0])
+        return
+    await interaction.delete_initial_response()
+    await bot.rest.create_message(interaction.channel_id,
+                                  f"<@{interaction.options[0].options[1].value}>, you've been invited to join call group {group[1]}",
+                                  component=bot.rest.build_message_action_row()
+                                  .add_interactive_button(hikari.ButtonStyle.PRIMARY,
+                                                          f"inv:{group[0]}:{interaction.options[0].options[1].value}:1",
+                                                          label="Accept")
+                                  .add_interactive_button(hikari.ButtonStyle.SECONDARY,
+                                                          f"inv:{group[0]}:{interaction.options[0].options[1].value}:0",
+                                                          label="Reject"), user_mentions=[interaction.options[0].options[1].value])
+
+
 commands: dict[str, Callable[[hikari.CommandInteraction, hikari.RESTBot], Coroutine[Any, Any, None]]] = {
     "help": help_command,
     "group create": create_command,
@@ -122,7 +145,8 @@ commands: dict[str, Callable[[hikari.CommandInteraction, hikari.RESTBot], Corout
     "group leave": leave_command,
     "group leaveall": leaveall_command,
     "group delete": delete_command,
-    "group call": call_command
+    "group call": call_command,
+    "group invite": invite_command
 }
 
 

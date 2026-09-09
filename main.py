@@ -2,6 +2,7 @@ import os
 import hikari
 import commands
 import autocomplete
+import component_callbacks
 import asyncio
 import sys
 
@@ -40,6 +41,19 @@ async def handle_command(interaction: hikari.CommandInteraction):
                                                   flags=hikari.MessageFlag.EPHEMERAL)
 
 
+async def handle_component(interaction: hikari.ComponentInteraction):
+    print(interaction.message.id)
+    print(interaction.custom_id)
+    callback_id = interaction.custom_id.split(":")[0]
+    callback = component_callbacks.get(callback_id)
+
+    if callback:
+        await callback(interaction, bot)
+    else:
+        await interaction.create_initial_response(hikari.ResponseType.MESSAGE_CREATE, "Internal error",
+                                                  flags=hikari.MessageFlag.EPHEMERAL)
+        
+
 async def handle_autocomplete(interaction: hikari.AutocompleteInteraction):
     command_path = build_interaction_path(interaction)
     handler = autocomplete.get(command_path) or commands.get(interaction.command_name)
@@ -51,12 +65,6 @@ async def handle_autocomplete(interaction: hikari.AutocompleteInteraction):
 
 async def create_commands(_bot: hikari.RESTBot):
     application = await _bot.rest.fetch_application()
-
-    help_command = _bot.rest.slash_command_builder("help", "Get help with using SmartPing!")
-    help_command.add_option(
-        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="commands", description="List bot commands"))
-    help_command.add_option(hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="attributes",
-                                                 description="List all possible group attributes"))
 
     group_command = _bot.rest.slash_command_builder("group", "Manage groups").set_context_types(
         [hikari.ApplicationContextType.GUILD])
@@ -98,11 +106,20 @@ async def create_commands(_bot: hikari.RESTBot):
                                                       is_required=False)
                              ]))
     group_command.add_option(
-        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="delete", description="Delete a call group",
+        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="delete", description="Invite a user to a group",
                              options=[
                                  hikari.CommandOption(type=hikari.OptionType.STRING, name="name",
                                                       description="Group name", max_length=32,
                                                       is_required=True, autocomplete=True)
+                             ]))
+    group_command.add_option(
+        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="invite", description="Delete a call group",
+                             options=[
+                                 hikari.CommandOption(type=hikari.OptionType.STRING, name="name",
+                                                      description="Group name", max_length=32,
+                                                      is_required=True, autocomplete=True),
+                                 hikari.CommandOption(type=hikari.OptionType.USER, name="user",
+                                                      description="User to be invited", is_required=True)
                              ]))
     group_command.add_option(
         hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND_GROUP, name="set", description="Set a group parameter",
@@ -161,6 +178,21 @@ async def create_commands(_bot: hikari.RESTBot):
                                                               type=hikari.OptionType.INTEGER,
                                                               name="value",
                                                               description="Value of the parameter",
+                                                              is_required=True,
+                                                              min_value=0)
+                                                      ]),
+                                 hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND,
+                                                      name="member_invites",
+                                                      description="Whether or not members are allowed to invite others",
+                                                      options=[
+                                                          hikari.CommandOption(type=hikari.OptionType.STRING,
+                                                                               name="name",
+                                                                               description="Group name", max_length=32,
+                                                                               is_required=True, autocomplete=True),
+                                                          hikari.CommandOption(
+                                                              type=hikari.OptionType.BOOLEAN,
+                                                              name="value",
+                                                              description="Value of the parameter",
                                                               is_required=True)
                                                       ])
 
@@ -169,7 +201,6 @@ async def create_commands(_bot: hikari.RESTBot):
     await _bot.rest.set_application_commands(
         application=application.id,
         commands=[
-            help_command,
             group_command
         ]
     )
@@ -180,5 +211,6 @@ bot = hikari.RESTBot(token=token, public_key=public_key)
 bot.add_startup_callback(create_commands)
 bot.set_listener(hikari.CommandInteraction, handle_command)
 bot.set_listener(hikari.AutocompleteInteraction, handle_autocomplete)
+bot.set_listener(hikari.ComponentInteraction, handle_component)
 
 bot.run()

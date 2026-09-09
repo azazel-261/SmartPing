@@ -66,6 +66,16 @@ async def fetch_group_autocomplete(guild_id: int, admin: bool = False):
             return res
 
 
+async def fetch_invitable_groups_autocomplete(search: str, guild_id: int, user_id: int, admin: bool = False):
+    async with await get_connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT g.name FROM groups g WHERE g.guild_id = %s AND g.name LIKE %s AND (%s OR g.owner_id = %s OR \
+                                             (EXISTS(SELECT * FROM group_relations r WHERE group_id = g.id AND user_id = %s) AND g.member_invites = TRUE))",
+                                 (guild_id, f"{search}%", admin, user_id, user_id,))
+            res = await cursor.fetchall()
+            return res
+
+
 async def count_group_members(group_id: int):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
@@ -85,14 +95,13 @@ async def delete_if_empty(group_id: int):
 
 
 async def create_group(owner_id: int, guild_id: int, name: str,
-                       private: bool = False, member_calls: bool = True,
-                       ext_calls: bool = True):
+                       private: bool = False):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
             try:
                 await cursor.execute(
-                    "INSERT INTO groups(owner_id, guild_id, name, private, member_calls, external_calls) VALUES (%s, %s, %s, %s, %s, %s) RETURNING id",
-                    (owner_id, guild_id, name, private, member_calls, ext_calls,))
+                    "INSERT INTO groups(owner_id, guild_id, name, private) VALUES (%s, %s, %s, %s) RETURNING id",
+                    (owner_id, guild_id, name, private,))
             except psycopg2.errors.UniqueViolation:
                 raise DatabaseError("Group with this name already exists")
             group_id: int = await cursor.fetchone()
@@ -110,13 +119,22 @@ async def join_group(name: str, guild_id: int, user_id: int, admin: bool = False
                 raise DatabaseError("Group not found or you don't have permission to join it")
             if res[1]:
                 member_count = await count_group_members(res[0])
-                if member_count >= res[1]:
+                if member_count >= res[1] and not admin:
                     raise DatabaseError("Group is at max capacity")
             try:
                 await cursor.execute("INSERT INTO group_relations (user_id, group_id) VALUES (%s, %s)",
                                      (user_id, res[0]))
             except psycopg2.errors.UniqueViolation:
                 raise DatabaseError("User already present in the group")
+
+
+async def accept_join_invite(group_id: int, user_id: int):
+    async with await get_connection() as conn:
+        async with conn.cursor() as cursor:
+            try:
+                await cursor.execute("INSERT INTO group_relations (user_id, group_id) VALUES (%s, %s)", (user_id, group_id, ))
+            except psycopg2.errors.UniqueViolation:
+                raise DatabaseError("User already present in the group!")
 
 
 async def leave_group(name: str, guild_id: int, user_id: int):
@@ -187,4 +205,20 @@ async def prepare_group_for_call(name: str, guild_id: int, executing_user_id: in
                     raise DatabaseError("Group call still on cooldown!")
             await cursor.execute("UPDATE groups SET last_call = %s WHERE id = %s", (now, group[0], ))
             return group[0]
+
+
+async def fetch_group_for_invite(name: str, guild_id: int, executing_user_id: int, admin: bool = False):
+    async with await get_connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT g.id, g.max_members, g.name FROM groups g WHERE g.guild_id = %s AND g.name = %s AND (%s OR g.owner_id = %s OR \
+                                 (EXISTS(SELECT * FROM group_relations r WHERE group_id = g.id AND user_id = %s) AND g.member_invites = TRUE))",
+                                 (guild_id, name, admin, executing_user_id, executing_user_id, ))
+            group = await cursor.fetchone()
+            if not group:
+                raise DatabaseError("Group not found or you don't have permission to join it")
+            if group[1]:
+                member_count = await count_group_members(group[0])
+                if member_count >= group[1] and not admin:
+                    raise DatabaseError("Group is at max capacity")
+            return group[0], group[2]
 
