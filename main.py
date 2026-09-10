@@ -42,8 +42,6 @@ async def handle_command(interaction: hikari.CommandInteraction):
 
 
 async def handle_component(interaction: hikari.ComponentInteraction):
-    print(interaction.message.id)
-    print(interaction.custom_id)
     callback_id = interaction.custom_id.split(":")[0]
     callback = component_callbacks.get(callback_id)
 
@@ -69,7 +67,7 @@ async def create_commands(_bot: hikari.RESTBot):
     group_command = _bot.rest.slash_command_builder("group", "Manage groups").set_context_types(
         [hikari.ApplicationContextType.GUILD])
     group_command.add_option(
-        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="create", description="Create a new call group",
+        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="create", description="Create a new call group", # ✅
                              options=[
                                  hikari.CommandOption(type=hikari.OptionType.STRING, name="name",
                                                       description="Group name", max_length=32,
@@ -80,23 +78,23 @@ async def create_commands(_bot: hikari.RESTBot):
                                                       is_required=False)
                              ]))
     group_command.add_option(
-        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="join", description="Join an existing call group",
+        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="join", description="Join an existing call group", # ✅
                              options=[
                                  hikari.CommandOption(type=hikari.OptionType.STRING, name="name",
                                                       description="Group name", max_length=32, is_required=True,
                                                       autocomplete=True)
                              ]))
     group_command.add_option(
-        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="leave", description="Leave a call group",
+        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="leave", description="Leave a call group", # ✅
                              options=[
                                  hikari.CommandOption(type=hikari.OptionType.STRING, name="name",
                                                       description="Group name", max_length=32, is_required=True,
                                                       autocomplete=True)
                              ]))
-    group_command.add_option(hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="leaveall",
+    group_command.add_option(hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="leaveall", # ✅
                                                   description="Leave all call groups in the server"))
     group_command.add_option(
-        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="call", description="Call a group",
+        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="call", description="Call a group", # ✅
                              options=[
                                  hikari.CommandOption(type=hikari.OptionType.STRING, name="name",
                                                       description="Group name", max_length=32,
@@ -106,14 +104,14 @@ async def create_commands(_bot: hikari.RESTBot):
                                                       is_required=False)
                              ]))
     group_command.add_option(
-        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="delete", description="Invite a user to a group",
+        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="delete", description="Invite a user to a group", # ✅
                              options=[
                                  hikari.CommandOption(type=hikari.OptionType.STRING, name="name",
                                                       description="Group name", max_length=32,
                                                       is_required=True, autocomplete=True)
                              ]))
     group_command.add_option(
-        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="invite", description="Delete a call group",
+        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="invite", description="Delete a call group", # ✅
                              options=[
                                  hikari.CommandOption(type=hikari.OptionType.STRING, name="name",
                                                       description="Group name", max_length=32,

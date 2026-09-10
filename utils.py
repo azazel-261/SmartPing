@@ -1,3 +1,4 @@
+from typing import Sequence
 import hikari
 
 async def check_if_admin(bot: hikari.RESTBot, user_id: int, guild_id: int):
@@ -10,3 +11,16 @@ async def check_if_admin(bot: hikari.RESTBot, user_id: int, guild_id: int):
         if role.permissions & hikari.Permissions.ADMINISTRATOR:
             return True
     return False
+
+
+def map_options(options: Sequence[hikari.CommandInteractionOption] | None):
+    out = {}
+    if not options:
+        return out
+    for option in options:
+        if option.type == hikari.OptionType.SUB_COMMAND or option.type == hikari.OptionType.SUB_COMMAND_GROUP:
+            extra = map_options(option.options)
+            out.update(extra)
+        else:
+            out[option.name] = option.value
+    return out
