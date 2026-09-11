@@ -16,7 +16,7 @@ async def get_connection():
     return conn
 
 
-async def fetch_joinable_groups_autocomplete(search: str, guild_id: int, user_id: int, admin: bool = False):
+async def fetch_joinable_groups_autocomplete(search: str, guild_id: int, user_id: int, admin: bool):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT g.name FROM (SELECT name, id, private FROM groups WHERE guild_id = %s) g \
@@ -37,7 +37,7 @@ async def fetch_user_groups_autocomplete(search: str, guild_id: int, user_id: in
             return res
 
 
-async def fetch_owned_groups_autocomplete(search: str, guild_id: int, user_id: int, admin: bool = False):
+async def fetch_owned_groups_autocomplete(search: str, guild_id: int, user_id: int, admin: bool):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute(
@@ -46,7 +46,7 @@ async def fetch_owned_groups_autocomplete(search: str, guild_id: int, user_id: i
             res = await cursor.fetchall()
             return res
 
-async def fetch_callable_groups_autocomplete(search: str, guild_id: int, user_id: int, admin: bool = False):
+async def fetch_callable_groups_autocomplete(search: str, guild_id: int, user_id: int, admin: bool):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT g.name FROM groups g WHERE g.guild_id = %s AND g.name LIKE %s AND \
@@ -57,7 +57,7 @@ async def fetch_callable_groups_autocomplete(search: str, guild_id: int, user_id
             return res
 
 
-async def fetch_group_autocomplete(guild_id: int, admin: bool = False):
+async def fetch_group_autocomplete(guild_id: int, admin: bool):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT name FROM groups WHERE guild_id = %s AND (private = FALSE OR %s = TRUE)",
@@ -66,7 +66,7 @@ async def fetch_group_autocomplete(guild_id: int, admin: bool = False):
             return res
 
 
-async def fetch_invitable_groups_autocomplete(search: str, guild_id: int, user_id: int, admin: bool = False):
+async def fetch_invitable_groups_autocomplete(search: str, guild_id: int, user_id: int, admin: bool):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT g.name FROM groups g WHERE g.guild_id = %s AND g.name LIKE %s AND (%s OR g.owner_id = %s OR \
@@ -108,7 +108,7 @@ async def create_group(owner_id: int, guild_id: int, name: str,
             await cursor.execute("INSERT INTO group_relations(user_id, group_id) VALUES (%s, %s)", (owner_id, group_id))
 
 
-async def join_group(name: str, guild_id: int, user_id: int, admin: bool = False):
+async def join_group(name: str, guild_id: int, user_id: int, admin: bool):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute(
@@ -140,32 +140,42 @@ async def accept_join_invite(group_id: int, user_id: int):
 async def leave_group(name: str, guild_id: int, user_id: int):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
-            await cursor.execute("SELECT id FROM groups WHERE guild_id = %s AND name = %s", (guild_id, name,))
+            await cursor.execute("SELECT id, owner_id FROM groups WHERE guild_id = %s AND name = %s", (guild_id, name,))
             group_res = await cursor.fetchone()
             if not group_res:
                 raise DatabaseError("Group not found")
-            await cursor.execute("DELETE FROM group_relations WHERE group_id = %s AND user_id = %s RETURNING group_id",
+            await cursor.execute("DELETE FROM group_relations WHERE group_id = %s AND user_id = %s RETURNING 1",
                                  (group_res[0], user_id,))
             res = await cursor.fetchone()
             if not res:
                 raise DatabaseError("User is not present in the group")
-            await delete_if_empty(res[0])
+            if group_res[1] == user_id:
+                try:
+                    await cursor.execute("UPDATE groups SET owner_id = (SELECT user_id FROM group_relations WHERE group_id = %s ORDER BY joined_at LIMIT 1) WHERE id = %s", (group_res[0], group_res[0], ))
+                except psycopg2.errors.NotNullViolation:
+                    await cursor.execute("DELETE FROM groups WHERE id = %s", (group_res[0],))
 
 
 async def leave_all_groups(guild_id: int, user_id: int):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("DELETE FROM group_relations r USING groups g \
-            WHERE r.group_id = g.id AND g.guild_id = %s AND r.user_id = %s RETURNING r.group_id", (guild_id, user_id,))
+            WHERE r.group_id = g.id AND g.guild_id = %s AND r.user_id = %s RETURNING r.group_id, g.owner_id", (guild_id, user_id,))
             res = await cursor.fetchone()
             if not res:
                 raise DatabaseError("User is not present in any groups")
             while res:
-                await delete_if_empty(res[0])
+                if res[1] == user_id:
+                    async with await get_connection() as conn2:
+                        async with conn2.cursor() as cursor2:
+                            try:
+                                await cursor2.execute("UPDATE groups SET owner_id = (SELECT user_id FROM group_relations WHERE group_id = %s ORDER BY joined_at LIMIT 1) WHERE id = %s", (res[0], res[0], ))
+                            except psycopg2.errors.NotNullViolation:
+                                await cursor2.execute("DELETE FROM groups WHERE id = %s", (res[0],))
                 res = await cursor.fetchone()
 
 
-async def delete_group(name: str, guild_id: int, executing_user_id: int, admin: bool = False):
+async def delete_group(name: str, guild_id: int, executing_user_id: int, admin: bool):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute(
@@ -188,7 +198,7 @@ async def generator_fetch_users_for_call(group_id: int):
             return
 
 
-async def prepare_group_for_call(name: str, guild_id: int, executing_user_id: int, admin: bool = False):
+async def prepare_group_for_call(name: str, guild_id: int, executing_user_id: int, admin: bool):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT g.id, g.last_call FROM groups g WHERE g.guild_id = %s AND g.name = %s AND \
@@ -207,7 +217,7 @@ async def prepare_group_for_call(name: str, guild_id: int, executing_user_id: in
             return group[0]
 
 
-async def fetch_group_for_invite(name: str, guild_id: int, executing_user_id: int, admin: bool = False):
+async def fetch_group_for_invite(name: str, guild_id: int, executing_user_id: int, admin: bool):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute("SELECT g.id, g.max_members, g.name FROM groups g WHERE g.guild_id = %s AND g.name = %s AND (%s OR g.owner_id = %s OR \
@@ -221,4 +231,69 @@ async def fetch_group_for_invite(name: str, guild_id: int, executing_user_id: in
                 if member_count >= group[1] and not admin:
                     raise DatabaseError("Group is at max capacity")
             return group[0], group[2]
+
+
+async def set_group_private(name: str, guild_id: int, executing_user_id: int, admin: bool, value: bool):
+    async with await get_connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("UPDATE groups SET private = %s WHERE guild_id = %s AND name = %s AND (owner_id = %s OR %s = TRUE) RETURNING 1",
+                                 (value, guild_id, name, executing_user_id, admin))
+            res = await cursor.fetchone()
+            if not res:
+                raise DatabaseError("Group not found or you don't have permission to manage it")
+
+
+async def set_group_member_calls(name: str, guild_id: int, executing_user_id: int, admin: bool, value: bool):
+    async with await get_connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "UPDATE groups SET member_calls = %s WHERE guild_id = %s AND name = %s AND (owner_id = %s OR %s = TRUE) RETURNING 1",
+                (value, guild_id, name, executing_user_id, admin))
+            res = await cursor.fetchone()
+            if not res:
+                raise DatabaseError("Group not found or you don't have permission to manage it")
+
+
+async def set_group_external_calls(name: str, guild_id: int, executing_user_id: int, admin: bool, value: bool):
+    async with await get_connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "UPDATE groups SET external_calls = %s WHERE guild_id = %s AND name = %s AND (owner_id = %s OR %s = TRUE) RETURNING 1",
+                (value, guild_id, name, executing_user_id, admin))
+            res = await cursor.fetchone()
+            if not res:
+                raise DatabaseError("Group not found or you don't have permission to manage it")
+
+
+async def set_group_max_members(name: str, guild_id: int, executing_user_id: int, admin: bool, value: int):
+    async with await get_connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "UPDATE groups SET max_members = %s WHERE guild_id = %s AND name = %s AND (owner_id = %s OR %s = TRUE) RETURNING 1",
+                (value, guild_id, name, executing_user_id, admin))
+            res = await cursor.fetchone()
+            if not res:
+                raise DatabaseError("Group not found or you don't have permission to manage it")
+
+
+async def set_group_member_invites(name: str, guild_id: int, executing_user_id: int, admin: bool, value: bool):
+    async with await get_connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "UPDATE groups SET member_invites = %s WHERE guild_id = %s AND name = %s AND (owner_id = %s OR %s = TRUE) RETURNING 1",
+                (value, guild_id, name, executing_user_id, admin))
+            res = await cursor.fetchone()
+            if not res:
+                raise DatabaseError("Group not found or you don't have permission to manage it")
+
+
+async def set_group_owner(name: str, guild_id: int, executing_user_id: int, admin: bool, value: int):
+    async with await get_connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute(
+                "UPDATE groups SET owner_id = %s WHERE guild_id = %s AND name = %s AND (owner_id = %s OR %s = TRUE) RETURNING 1",
+                (value, guild_id, name, executing_user_id, admin))
+            res = await cursor.fetchone()
+            if not res:
+                raise DatabaseError("Group not found or you don't have permission to manage it")
 

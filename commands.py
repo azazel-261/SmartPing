@@ -13,13 +13,12 @@ def get_option(options: Sequence[hikari.CommandInteractionOption], name: str, de
             return o.value
     return default
 
-async def create_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot):
+async def create_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
                                               flags=hikari.MessageFlag.EPHEMERAL)
     if not interaction.guild_id:
         return
     try:
-        args = utils.map_options(interaction.options)
         await database.create_group(interaction.user.id, interaction.guild_id,
                                     args['name'],
                                     args.get('private', False))
@@ -28,13 +27,12 @@ async def create_command(interaction: hikari.CommandInteraction, bot: hikari.RES
         await interaction.edit_initial_response(e.args[0])
 
 
-async def join_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot):
+async def join_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
                                               flags=hikari.MessageFlag.EPHEMERAL)
     if not interaction.guild_id:
         return
     try:
-        args = utils.map_options(interaction.options)
         await database.join_group(args['name'], interaction.guild_id, interaction.user.id,
                                   await utils.check_if_admin(bot, interaction.user.id, interaction.guild_id))
         await interaction.edit_initial_response("Group joined successfully")
@@ -42,20 +40,19 @@ async def join_command(interaction: hikari.CommandInteraction, bot: hikari.RESTB
         await interaction.edit_initial_response(e.args[0])
 
 
-async def leave_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot):
+async def leave_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
                                               flags=hikari.MessageFlag.EPHEMERAL)
     if not interaction.guild_id:
         return
     try:
-        args = utils.map_options(interaction.options)
         await database.leave_group(args['name'], interaction.guild_id, interaction.user.id)
         await interaction.edit_initial_response("Group leave successful")
     except database.DatabaseError as e:
         await interaction.edit_initial_response(e.args[0])
 
 
-async def leaveall_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot):
+async def leaveall_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
                                               flags=hikari.MessageFlag.EPHEMERAL)
     if not interaction.guild_id:
@@ -67,13 +64,12 @@ async def leaveall_command(interaction: hikari.CommandInteraction, bot: hikari.R
         await interaction.edit_initial_response(e.args[0])
 
 
-async def delete_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot):
+async def delete_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
                                               flags=hikari.MessageFlag.EPHEMERAL)
     if not interaction.guild_id:
         return
     try:
-        args = utils.map_options(interaction.options)
         await database.delete_group(args['name'], interaction.guild_id, interaction.user.id,
                                     await utils.check_if_admin(bot, interaction.user.id, interaction.guild_id))
         await interaction.edit_initial_response("Successfully deleted group")
@@ -81,11 +77,10 @@ async def delete_command(interaction: hikari.CommandInteraction, bot: hikari.RES
         await interaction.edit_initial_response(e.args[0])
 
 
-async def call_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot):
+async def call_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
                                               flags=hikari.MessageFlag.EPHEMERAL)
     try:
-        args = utils.map_options(interaction.options)
         group_id = await database.prepare_group_for_call(args['name'], interaction.guild_id, interaction.user.id,
                                                     await utils.check_if_admin(bot, interaction.user.id, interaction.guild_id))
     except database.DatabaseError as e:
@@ -106,11 +101,10 @@ async def call_command(interaction: hikari.CommandInteraction, bot: hikari.RESTB
         await out.delete()
 
 
-async def invite_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot):
+async def invite_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
                                               flags=hikari.MessageFlag.EPHEMERAL)
     try:
-        args = utils.map_options(interaction.options)
         group = await database.fetch_group_for_invite(args['name'], interaction.guild_id,
                                                          interaction.user.id,
                                                          await utils.check_if_admin(bot, interaction.user.id,
@@ -130,14 +124,110 @@ async def invite_command(interaction: hikari.CommandInteraction, bot: hikari.RES
                                                           label="Reject"), user_mentions=[args['user']])
 
 
-commands: dict[str, Callable[[hikari.CommandInteraction, hikari.RESTBot], Coroutine[Any, Any, None]]] = {
+async def set_private_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
+    await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
+                                              flags=hikari.MessageFlag.EPHEMERAL)
+    try:
+        await database.set_group_private(args['name'], interaction.guild_id,
+                                         interaction.user.id,
+                                         await utils.check_if_admin(bot, interaction.user.id,
+                                                                    interaction.guild_id),
+                                         args['value'])
+    except database.DatabaseError as e:
+        await interaction.edit_initial_response(e.args[0])
+        return
+    await interaction.edit_initial_response("Group edited successfully")
+
+
+async def set_member_calls_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
+    await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
+                                              flags=hikari.MessageFlag.EPHEMERAL)
+    try:
+        await database.set_group_member_calls(args['name'], interaction.guild_id,
+                                         interaction.user.id,
+                                         await utils.check_if_admin(bot, interaction.user.id,
+                                                                    interaction.guild_id),
+                                         args['value'])
+    except database.DatabaseError as e:
+        await interaction.edit_initial_response(e.args[0])
+        return
+    await interaction.edit_initial_response("Group edited successfully")
+
+
+async def set_ext_calls_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
+    await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
+                                              flags=hikari.MessageFlag.EPHEMERAL)
+    try:
+        await database.set_group_external_calls(args['name'], interaction.guild_id,
+                                         interaction.user.id,
+                                         await utils.check_if_admin(bot, interaction.user.id,
+                                                                    interaction.guild_id),
+                                         args['value'])
+    except database.DatabaseError as e:
+        await interaction.edit_initial_response(e.args[0])
+        return
+    await interaction.edit_initial_response("Group edited successfully")
+
+
+async def set_max_members_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
+    await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
+                                              flags=hikari.MessageFlag.EPHEMERAL)
+    try:
+        await database.set_group_max_members(args['name'], interaction.guild_id,
+                                         interaction.user.id,
+                                         await utils.check_if_admin(bot, interaction.user.id,
+                                                                    interaction.guild_id),
+                                         args['value'])
+    except database.DatabaseError as e:
+        await interaction.edit_initial_response(e.args[0])
+        return
+    await interaction.edit_initial_response("Group edited successfully")
+
+
+async def set_member_invites_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
+    await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
+                                              flags=hikari.MessageFlag.EPHEMERAL)
+    try:
+        await database.set_group_member_invites(args['name'], interaction.guild_id,
+                                         interaction.user.id,
+                                         await utils.check_if_admin(bot, interaction.user.id,
+                                                                    interaction.guild_id),
+                                         args['value'])
+    except database.DatabaseError as e:
+        await interaction.edit_initial_response(e.args[0])
+        return
+    await interaction.edit_initial_response("Group edited successfully")
+
+
+async def set_owner_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
+    await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
+                                              flags=hikari.MessageFlag.EPHEMERAL)
+    try:
+        await database.set_group_owner(args['name'], interaction.guild_id,
+                                         interaction.user.id,
+                                         await utils.check_if_admin(bot, interaction.user.id,
+                                                                    interaction.guild_id),
+                                         args['value'])
+    except database.DatabaseError as e:
+        await interaction.edit_initial_response(e.args[0])
+        return
+    await interaction.edit_initial_response("Group edited successfully")
+
+
+commands: dict[str, Callable[[hikari.CommandInteraction, hikari.RESTBot, dict[str, Any]], Coroutine[Any, Any, None]]] = {
     "group create": create_command,
     "group join": join_command,
     "group leave": leave_command,
     "group leaveall": leaveall_command,
     "group delete": delete_command,
     "group call": call_command,
-    "group invite": invite_command
+    "group invite": invite_command,
+    "group set private": set_private_command,
+    "group set member_calls": set_member_calls_command,
+    "group set external_calls": set_ext_calls_command,
+    "group set max_members": set_max_members_command,
+    "group set member_invites": set_member_invites_command,
+    "group set owner": set_owner_command
 }
 
 

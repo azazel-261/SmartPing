@@ -5,6 +5,7 @@ import autocomplete
 import component_callbacks
 import asyncio
 import sys
+import utils
 
 if sys.version_info >= (3, 8) and sys.platform.lower().startswith("win"):
     asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
@@ -35,7 +36,7 @@ async def handle_command(interaction: hikari.CommandInteraction):
     command = commands.get(command_path) or commands.get(interaction.command_name)
 
     if command:
-        await command(interaction, bot)
+        await command(interaction, bot, utils.map_options(interaction.options))
     else:
         await interaction.create_initial_response(hikari.ResponseType.MESSAGE_CREATE, "Internal error",
                                                   flags=hikari.MessageFlag.EPHEMERAL)
@@ -57,7 +58,7 @@ async def handle_autocomplete(interaction: hikari.AutocompleteInteraction):
     handler = autocomplete.get(command_path) or commands.get(interaction.command_name)
 
     if handler:
-        return await handler(interaction, bot)
+        return await handler(interaction, bot, utils.map_options(interaction.options))
     return interaction.build_response([])
 
 
@@ -104,14 +105,14 @@ async def create_commands(_bot: hikari.RESTBot):
                                                       is_required=False)
                              ]))
     group_command.add_option(
-        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="delete", description="Invite a user to a group", # ✅
+        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="delete", description="Delete a call group", # ✅
                              options=[
                                  hikari.CommandOption(type=hikari.OptionType.STRING, name="name",
                                                       description="Group name", max_length=32,
                                                       is_required=True, autocomplete=True)
                              ]))
     group_command.add_option(
-        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="invite", description="Delete a call group", # ✅
+        hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND, name="invite", description="Invite another user to a call group", # ✅
                              options=[
                                  hikari.CommandOption(type=hikari.OptionType.STRING, name="name",
                                                       description="Group name", max_length=32,
@@ -192,6 +193,15 @@ async def create_commands(_bot: hikari.RESTBot):
                                                               name="value",
                                                               description="Value of the parameter",
                                                               is_required=True)
+                                                      ]),
+                                 hikari.CommandOption(type=hikari.OptionType.SUB_COMMAND,
+                                                      name="owner",
+                                                      description="Transfer group ownership to another person",
+                                                      options=[
+                                                          hikari.CommandOption(type=hikari.OptionType.USER,
+                                                                               name="user",
+                                                                               description="New group owner",
+                                                                               is_required=True)
                                                       ])
 
                              ]))
