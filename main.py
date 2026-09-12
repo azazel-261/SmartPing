@@ -61,12 +61,11 @@ async def handle_autocomplete(interaction: hikari.AutocompleteInteraction):
         return await handler(interaction, bot, utils.map_options(interaction.options))
     return interaction.build_response([])
 
+if __name__ == "__main__":
+    bot = hikari.RESTBot(token=token, public_key=public_key)
 
-bot = hikari.RESTBot(token=token, public_key=public_key)
+    bot.set_listener(hikari.CommandInteraction, handle_command)
+    bot.set_listener(hikari.AutocompleteInteraction, handle_autocomplete)
+    bot.set_listener(hikari.ComponentInteraction, handle_component)
 
-
-bot.set_listener(hikari.CommandInteraction, handle_command)
-bot.set_listener(hikari.AutocompleteInteraction, handle_autocomplete)
-bot.set_listener(hikari.ComponentInteraction, handle_component)
-
-bot.run()
+    bot.run()
