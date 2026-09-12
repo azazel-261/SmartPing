@@ -175,7 +175,7 @@ async def leave_all_groups(guild_id: int, user_id: int):
                 res = await cursor.fetchone()
 
 
-async def delete_group(name: str, guild_id: int, executing_user_id: int, admin: bool):
+async def fetch_group_for_deletion(name: str, guild_id: int, executing_user_id: int, admin: bool):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
             await cursor.execute(
@@ -184,7 +184,16 @@ async def delete_group(name: str, guild_id: int, executing_user_id: int, admin: 
             res = await cursor.fetchone()
             if not res:
                 raise DatabaseError("Group not found or you don't have permission to manage it")
-            await cursor.execute("DELETE FROM groups WHERE id = %s", (res[0],))
+            return res[0]
+
+
+async def delete_group(group_id: int, executing_user_id: int, admin: bool):
+    async with await get_connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("DELETE FROM groups WHERE id = %s AND (owner_id = %s OR %s = TRUE) RETURNING 1", (group_id, executing_user_id, admin, ))
+            res = await cursor.fetchone()
+            if not res:
+                raise DatabaseError("Group not found or you don't have permission to manage it")
 
 
 async def generator_fetch_users_for_call(group_id: int):
@@ -287,12 +296,31 @@ async def set_group_member_invites(name: str, guild_id: int, executing_user_id: 
                 raise DatabaseError("Group not found or you don't have permission to manage it")
 
 
-async def set_group_owner(name: str, guild_id: int, executing_user_id: int, admin: bool, value: int):
+async def fetch_group_for_transfer(name: str, guild_id: int, executing_user_id: int, admin: bool, new_owner: int):
     async with await get_connection() as conn:
         async with conn.cursor() as cursor:
+            await cursor.execute("SELECT id FROM groups WHERE guild_id = %s AND name = %s AND (owner_id = %s OR %s = TRUE)",
+                                 (guild_id, name, executing_user_id, admin))
+            res = await cursor.fetchone()
+            if not res:
+                raise DatabaseError("Group not found or you don't have permission to manage it")
+            await cursor.execute("SELECT 1 FROM group_relations WHERE group_id = %s AND user_id = %s", (res[0], new_owner))
+            res2 = await cursor.fetchone()
+            if not res2:
+                raise DatabaseError("New owner must be a member of the call group!")
+            return res[0]
+
+async def transfer_group(group_id: int, executing_user_id: int, admin: bool, new_owner: int):
+    async with await get_connection() as conn:
+        async with conn.cursor() as cursor:
+            await cursor.execute("SELECT 1 FROM group_relations WHERE group_id = %s AND user_id = %s",
+                                 (group_id, new_owner))
+            res2 = await cursor.fetchone()
+            if not res2:
+                raise DatabaseError("New owner must be a member of the call group!")
             await cursor.execute(
-                "UPDATE groups SET owner_id = %s WHERE guild_id = %s AND name = %s AND (owner_id = %s OR %s = TRUE) RETURNING 1",
-                (value, guild_id, name, executing_user_id, admin))
+                "UPDATE groups SET owner_id = %s WHERE id = %s AND (owner_id = %s OR %s = TRUE) RETURNING 1",
+                (new_owner, group_id, executing_user_id, admin))
             res = await cursor.fetchone()
             if not res:
                 raise DatabaseError("Group not found or you don't have permission to manage it")

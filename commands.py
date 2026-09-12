@@ -70,12 +70,20 @@ async def delete_command(interaction: hikari.CommandInteraction, bot: hikari.RES
     if not interaction.guild_id:
         return
     try:
-        await database.delete_group(args['name'], interaction.guild_id, interaction.user.id,
+        group = await database.fetch_group_for_deletion(args['name'], interaction.guild_id, interaction.user.id,
                                     await utils.check_if_admin(bot, interaction.user.id, interaction.guild_id))
-        await interaction.edit_initial_response("Successfully deleted group")
     except database.DatabaseError as e:
         await interaction.edit_initial_response(e.args[0])
+        return
 
+    await interaction.edit_initial_response(f"Are you sure you want to delete call group {args['name']}?",
+                                            component=bot.rest.build_message_action_row()
+                                  .add_interactive_button(hikari.ButtonStyle.DANGER,
+                                                          f"del:{group}:{interaction.user.id}:1",
+                                                          label="Yes")
+                                  .add_interactive_button(hikari.ButtonStyle.SECONDARY,
+                                                          f"del:{group}:{interaction.user.id}:0",
+                                                          label="No"))
 
 async def call_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
@@ -202,16 +210,24 @@ async def set_member_invites_command(interaction: hikari.CommandInteraction, bot
 async def set_owner_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
                                               flags=hikari.MessageFlag.EPHEMERAL)
+    if not interaction.guild_id:
+        return
     try:
-        await database.set_group_owner(args['name'], interaction.guild_id,
-                                         interaction.user.id,
-                                         await utils.check_if_admin(bot, interaction.user.id,
-                                                                    interaction.guild_id),
-                                         args['value'])
+        group = await database.fetch_group_for_transfer(args['name'], interaction.guild_id, interaction.user.id,
+                                                        await utils.check_if_admin(bot, interaction.user.id,
+                                                                                   interaction.guild_id), args['user'])
     except database.DatabaseError as e:
         await interaction.edit_initial_response(e.args[0])
         return
-    await interaction.edit_initial_response("Group edited successfully")
+
+    await interaction.edit_initial_response(f"Are you sure you want to transfer call group {args['name']} to <@{args['user']}>?",
+                                            component=bot.rest.build_message_action_row()
+                                            .add_interactive_button(hikari.ButtonStyle.DANGER,
+                                                                    f"trs:{group}:{interaction.user.id}:{args['user']}:1",
+                                                                    label="Yes")
+                                            .add_interactive_button(hikari.ButtonStyle.SECONDARY,
+                                                                    f"trs:{group}:{interaction.user.id}:{args['user']}:0",
+                                                                    label="No"))
 
 
 commands: dict[str, Callable[[hikari.CommandInteraction, hikari.RESTBot, dict[str, Any]], Coroutine[Any, Any, None]]] = {
