@@ -1,17 +1,9 @@
 import asyncio
-from typing import Callable, Coroutine, Any, Sequence
+from typing import Callable, Coroutine, Any
 
 import hikari
 import database
 import utils
-from database import generator_fetch_users_for_call
-
-
-def get_option(options: Sequence[hikari.CommandInteractionOption], name: str, default=None):
-    for o in options:
-        if o.name == name:
-            return o.value
-    return default
 
 async def create_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
@@ -96,7 +88,7 @@ async def call_command(interaction: hikari.CommandInteraction, bot: hikari.RESTB
         return
     await interaction.delete_initial_response()
     msg = args.get('msg', "") + "\n"
-    generator = generator_fetch_users_for_call(group_id)
+    generator = database.generator_fetch_users_for_call(group_id)
     await bot.rest.create_message(interaction.channel_id, f"Call by <@{interaction.user.id}>\n{msg}")
     async for group in generator:
         if not group:
@@ -112,6 +104,9 @@ async def call_command(interaction: hikari.CommandInteraction, bot: hikari.RESTB
 async def invite_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
                                               flags=hikari.MessageFlag.EPHEMERAL)
+    if await utils.check_if_bot(bot, args['user']):
+        await interaction.edit_initial_response("Cannot invite a bot!")
+        return
     try:
         group = await database.fetch_group_for_invite(args['name'], interaction.guild_id,
                                                          interaction.user.id,
@@ -210,6 +205,9 @@ async def set_member_invites_command(interaction: hikari.CommandInteraction, bot
 async def set_owner_command(interaction: hikari.CommandInteraction, bot: hikari.RESTBot, args: dict[str, Any]):
     await interaction.create_initial_response(hikari.ResponseType.DEFERRED_MESSAGE_CREATE,
                                               flags=hikari.MessageFlag.EPHEMERAL)
+    if await utils.check_if_bot(bot, args['user']):
+        await interaction.edit_initial_response("Cannot transfer ownership to a bot")
+        return
     if not interaction.guild_id:
         return
     try:

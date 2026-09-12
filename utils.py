@@ -1,6 +1,10 @@
 from typing import Sequence
 import hikari
 
+async def check_if_bot(bot: hikari.RESTBot, user_id: int):
+    user = await bot.rest.fetch_user(user_id)
+    return user.is_bot
+
 async def check_if_admin(bot: hikari.RESTBot, user_id: int, guild_id: int):
     guild = await bot.rest.fetch_guild(guild_id)
     if guild.owner_id == user_id:
