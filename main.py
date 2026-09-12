@@ -68,4 +68,4 @@ if __name__ == "__main__":
     bot.set_listener(hikari.AutocompleteInteraction, handle_autocomplete)
     bot.set_listener(hikari.ComponentInteraction, handle_component)
 
-    bot.run()
+    bot.run(port=int(os.getenv("PORT") or "8080"))
